@@ -1,0 +1,24 @@
+{
+  "name": "serve-gridfs",
+  "version": "0.0.1",
+  "description": "serve files with mongodb grdifs",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aunz/serve-gridfs.git"
+  },
+  "keywords": [
+    "gridfs",
+    "mongodb",
+    "express"
+  ],
+  "author": "aunz",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/aunz/serve-gridfs/issues"
+  },
+  "homepage": "https://github.com/aunz/serve-gridfs#readme"
+}
