@@ -1,0 +1,31 @@
+module.exports = {
+  parser: 'babel-eslint',
+  extends: 'airbnb',
+  plugins: ['react'],
+  globals: {
+    __CLIENT__: true,
+    __SERVER__: true,
+    __CORDOVA__: true,
+    window: true,
+  },
+  rules: {
+    semi: [2, 'never'],
+    'no-console': 0,
+    'no-use-before-define': [2, 'nofunc'],
+    // camelcase: 0,
+    'func-names': 0,
+    // 'comma-dangle': 0,
+    // 'max-len': 0,
+    'prefer-template': 0,
+    'prefer-arrow-callback': 0,
+    'no-unused-expressions': 0,
+    'dot-notation': 0,
+    'global-require': 0,
+    'no-underscore-dangle': 0,
+    'arrow-body-style': 0,
+    'react/jsx-filename-extension': 0,
+    'react/forbid-prop-types': 0,
+    'import/no-extraneous-dependencies': 0,
+    'arrow-parens': 0,
+  }
+}
