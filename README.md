@@ -13,7 +13,7 @@ Require [node-mongodb-native 2.2.x](https://github.com/mongodb/node-mongodb-nati
 
 ### Install
 ```shell
-$ npm i serve-gridfs -D
+$ npm i serve-gridfs
 ```
 
 ### API
