@@ -1,6 +1,6 @@
 {
   "name": "serve-gridfs",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "serve files with mongodb grdifs",
   "main": "index.js",
   "scripts": {
