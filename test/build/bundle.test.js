@@ -98,56 +98,70 @@ var _src2 = _interopRequireDefault(_src);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
-var mongoConnection = _mongodb.MongoClient.connect('mongodb://localhost:27017/serve_grid_test');
-mongoConnection.then(function (db) {
-  db.collection('fs.files').count().then(function (r) {
+const mongoConnection = _mongodb.MongoClient.connect('mongodb://localhost:27017/serve_grid_test');
+mongoConnection.then(db => {
+  db.collection('fs.files').count().then(r => {
     if (r) return;
-    Promise.all([uploadFile('./test/cat.png', '001'), uploadFile('./test/mouse.jpeg', '002', 'image/jpeg'), uploadFile('./test/bunnyBig.mp4', 'bunnyBig.mp4', 'video/mp4'), uploadFile('./test/cat.png', 'cat.png'), uploadFile('./test/mouse.jpeg', 'mouse.jpeg'), uploadFile('./test/number.txt', '003')]).then(function () {
+    Promise.all([uploadFile('./test/cat.png', '001'), uploadFile('./test/mouse.jpeg', '002', 'image/jpeg'), uploadFile('./test/bunnyBig.mp4', 'bunnyBig.mp4', 'video/mp4'), uploadFile('./test/cat.png', 'cat.png'), uploadFile('./test/mouse.jpeg', 'm/mouse.jpeg'), uploadFile('./test/number.txt', '003')]).then(() => {
       console.log('DB setup completed.');
     });
   });
 
-  function uploadFile(file, _id, contentType) {
-    return new Promise(function (res, rej) {
-      var bucket = new _mongodb.GridFSBucket(db);
-      var uploadStream = bucket.openUploadStreamWithId(_id, '', { contentType: contentType });
+  db.collection('fs2.files').count().then(r => {
+    if (r) return;
+    Promise.all([uploadFile('./test/cat.png', '001b', '', { bucketName: 'fs2' })]).then(() => {
+      console.log('DB2 setup completed.');
+    });
+  });
+
+  function uploadFile(file, _id, contentType, options = {}) {
+    return new Promise((res, rej) => {
+      const bucket = new _mongodb.GridFSBucket(db, options);
+      const uploadStream = bucket.openUploadStreamWithId(_id, '', { contentType });
       (0, _fs.createReadStream)(file).on('error', rej).pipe(uploadStream).on('finish', res);
     });
   }
 });
 
-var app = (0, _express2.default)();
-app.use(function (req, res, next) {
+const app = (0, _express2.default)();
+app.use((req, res, next) => {
   next();
 });
 app.use(_express2.default.static('./test/build'));
 app.use('/gridfs', (0, _src2.default)(mongoConnection)); // this is the serveGridfs middleware for end users
+app.use('/gridfs-no-fallthrough', (0, _src2.default)(mongoConnection, { fallthrough: false }));
 app.use('/gridfs-maxAge10', (0, _src2.default)(mongoConnection, { maxAge: 10 }));
 app.use('/gridfs-maxAge0', (0, _src2.default)(mongoConnection, { maxAge: 0 }));
 app.use('/gridfs-no-cacheControl', (0, _src2.default)(mongoConnection, { cacheControl: false }));
 app.use('/gridfs-set-cacheControl', (0, _src2.default)(mongoConnection, { cacheControl: 'blah blah' }));
 app.use('/gridfs-no-etag', (0, _src2.default)(mongoConnection, { etag: false }));
 app.use('/gridfs-no-lastModified', (0, _src2.default)(mongoConnection, { lastModified: false }));
-app.use('/gridfs-setHeaders', (0, _src2.default)(mongoConnection, { setHeader: setHeader }));
+app.use('/gridfs-setHeaders', (0, _src2.default)(mongoConnection, { setHeader }));
 function setHeader(res, _id, doc) {
   res.setHeader('tada', 'peanut');
   res.setHeader('content-type', 'picture');
   res.setHeader('_id', _id);
   res.setHeader('doclength', doc.length);
 }
+app.use('/gridfs2', (0, _src2.default)(mongoConnection, { bucketName: 'fs2' }));
 
-app.use(function (req, res, next) {
-  res.end(404);
+app.use((req, res) => {
+  res.status(404).end('Nothing found');
+});
+
+app.use((error, req, res, next) => {
+  console.log('the error', error);
+  res.end('Some error');
 });
 
 app.listen(3000, function () {
   console.log('\n\n\n\n\nExpress listening... and start testing now\n\n\n\n\n');
 });
 
-(0, _tape.test)('Fetching a file known to be present in the server', function (t) {
-  t.plan(9);
+(0, _tape.test)('Fetching a file known to be present in the server', t => {
+  t.plan(11);
 
-  (0, _nodeFetch2.default)('http://localhost:3000/gridfs/001').then(function (res) {
+  (0, _nodeFetch2.default)('http://localhost:3000/gridfs/001').then(res => {
     t.equal(res.status, 200, 'return with a 200');
     t.equal(res.headers.get('cache-control'), 'public, max-age=0', 'cachable');
     t.equal(res.headers.get('content-length'), '134437', 'have content-length');
@@ -156,102 +170,128 @@ app.listen(3000, function () {
     t.equal(res.headers.get('content-type'), null, 'cat has no content-type');
     t.ok(new Date(res.headers.get('last-modified')) < new Date(), 'have last-modified');
     return res.buffer();
-  }).then(function (buffer) {
-    (0, _fs.readFile)('./test/cat.png', function (err, result) {
+  }).then(buffer => {
+    (0, _fs.readFile)('./test/cat.png', (err, result) => {
       t.equal(buffer.toString(), result.toString(), 'get the same cat pic');
-      // t.end()
     });
   });
 
-  (0, _nodeFetch2.default)('http://localhost:3000/gridfs/002').then(function (res) {
+  (0, _nodeFetch2.default)('http://localhost:3000/gridfs/002').then(res => {
     t.equal(res.headers.get('content-type'), 'image/jpeg', 'mouse has content-type');
+  });
+
+  (0, _nodeFetch2.default)('http://localhost:3000/gridfs/m/mouse.jpeg').then(res => {
+    t.equal(res.status, 200, 'Can fetch file with slash');
+    t.equal(res.headers.get('etag'), '349e676ef9e4aff7e9d7bab6b52c44ce', 'with the right etag');
   });
 });
 
-(0, _tape.test)('Fetching a file already cached', function (t) {
+(0, _tape.test)('Fetching a file already cached', t => {
   t.plan(7);
 
-  (0, _nodeFetch2.default)('http://localhost:3000/gridfs/001', { headers: { 'If-None-Match': 'fc43bf18c7c58fdec94d3caa2108a25b' } }).then(function (res) {
+  (0, _nodeFetch2.default)('http://localhost:3000/gridfs/001', { headers: { 'If-None-Match': 'fc43bf18c7c58fdec94d3caa2108a25b' } }).then(res => {
     t.equal(res.status, 304, 'when If-None-Match is correctly set in request header');
-    var n = JSON.stringify([res.headers.get('cache-control'), res.headers.get('content-length'), res.headers.get('etag'), res.headers.get('accept-ranges'), res.headers.get('content-type'), res.headers.get('last-modified')]);
+    const n = JSON.stringify([res.headers.get('cache-control'), res.headers.get('content-length'), res.headers.get('etag'), res.headers.get('accept-ranges'), res.headers.get('content-type'), res.headers.get('last-modified')]);
     t.equal(n, '[null,null,null,null,null,null]', 'empty headers when 304');
   });
-  (0, _nodeFetch2.default)('http://localhost:3000/gridfs/001', { headers: { 'If-None-Match': '' } }).then(function (res) {
+  (0, _nodeFetch2.default)('http://localhost:3000/gridfs/001', { headers: { 'If-None-Match': '' } }).then(res => {
     t.equal(res.status, 200, 'when If-None-Match is NOT correctly set in request header');
   });
-  (0, _nodeFetch2.default)('http://localhost:3000/gridfs-no-etag/001', { headers: { 'If-None-Match': 'fc43bf18c7c58fdec94d3caa2108a25b' } }).then(function (res) {
+  (0, _nodeFetch2.default)('http://localhost:3000/gridfs-no-etag/001', { headers: { 'If-None-Match': 'fc43bf18c7c58fdec94d3caa2108a25b' } }).then(res => {
     t.equal(res.status, 200, 'etag is disabled in server');
   });
 
-  (0, _nodeFetch2.default)('http://localhost:3000/gridfs/001', { headers: { 'If-Modified-Since': new Date().toString() } }).then(function (res) {
+  (0, _nodeFetch2.default)('http://localhost:3000/gridfs/001', { headers: { 'If-Modified-Since': new Date().toString() } }).then(res => {
     t.equal(res.status, 304, 'when If-Modified-Since is correctly set in request header');
   });
   (0, _nodeFetch2.default)('http://localhost:3000/gridfs/001', { headers: { 'If-Modified-Since': new Date('1/1/1111').toString() } }) // ancient time
-  .then(function (res) {
+  .then(res => {
     t.equal(res.status, 200, 'when If-Modified-Since is NOT correctly set in request header');
   });
-  (0, _nodeFetch2.default)('http://localhost:3000/gridfs-no-lastModified/001', { headers: { 'If-Modified-Since': new Date().toString() } }).then(function (res) {
+  (0, _nodeFetch2.default)('http://localhost:3000/gridfs-no-lastModified/001', { headers: { 'If-Modified-Since': new Date().toString() } }).then(res => {
     t.equal(res.status, 200, 'lastModified is disabled in server');
   });
 });
 
-(0, _tape.test)('Setting cacheControl and maxAge', function (t) {
+(0, _tape.test)('Setting cacheControl and maxAge', t => {
   t.plan(4);
-  (0, _nodeFetch2.default)('http://localhost:3000/gridfs-maxAge10/001').then(function (res) {
+  (0, _nodeFetch2.default)('http://localhost:3000/gridfs-maxAge10/001').then(res => {
     t.equal(res.headers.get('cache-control'), 'public, max-age=10', 'can change maxAge');
   });
 
-  (0, _nodeFetch2.default)('http://localhost:3000/gridfs-maxAge0/001').then(function (res) {
+  (0, _nodeFetch2.default)('http://localhost:3000/gridfs-maxAge0/001').then(res => {
     t.equal(res.headers.get('cache-control'), 'public, max-age=0', 'can change maxAge');
   });
 
-  (0, _nodeFetch2.default)('http://localhost:3000/gridfs-no-cacheControl/001').then(function (res) {
+  (0, _nodeFetch2.default)('http://localhost:3000/gridfs-no-cacheControl/001').then(res => {
     t.equal(res.headers.get('cache-control'), null, 'no cache control');
   });
 
-  (0, _nodeFetch2.default)('http://localhost:3000/gridfs-set-cacheControl/001').then(function (res) {
+  (0, _nodeFetch2.default)('http://localhost:3000/gridfs-set-cacheControl/001').then(res => {
     t.equal(res.headers.get('cache-control'), 'blah blah', 'setting cache control to arbitrary blah blah');
   });
 });
 
-(0, _tape.test)('Fetching a non-existent file', function (t) {
-  t.plan(1);
+(0, _tape.test)('Fetching a non-existent file', t => {
+  t.plan(4);
 
-  (0, _nodeFetch2.default)('http://localhost:3000/gridfs/004').then(function (res) {
+  (0, _nodeFetch2.default)('http://localhost:3000/gridfs/004').then(res => {
     t.equal(res.status, 404, 'when no such file is present');
+    return res.buffer();
+  }).then(buffer => {
+    t.equal(buffer.toString(), 'Nothing found', 'The req has passed thru to a downstream middleware');
+  });
+  (0, _nodeFetch2.default)('http://localhost:3000/gridfs-no-fallthrough/004').then(res => {
+    t.equal(res.status, 404, 'when no such file is present');
+    return res.buffer();
+  }).then(buffer => {
+    t.equal(buffer.toString(), 'Some error', 'The req did not pass thru');
   });
 });
 
-(0, _tape.test)('Range request', function (t) {
+(0, _tape.test)('Changing bucketName', t => {
+  t.plan(2);
+
+  (0, _nodeFetch2.default)('http://localhost:3000/gridfs2/001b').then(res => {
+    t.equal(res.status, 200, 'able to change bucketName');
+  });
+
+  (0, _nodeFetch2.default)('http://localhost:3000/gridfs2/001').then(res => {
+    // console.log(res )
+    t.equal(res.status, 404, 'No such file in this bucket fs2');
+  });
+});
+
+(0, _tape.test)('Range request', t => {
   t.plan(10);
 
-  (0, _nodeFetch2.default)('http://localhost:3000/gridfs/003', { headers: { range: 'bytes=0-10' } }).then(function (res) {
+  (0, _nodeFetch2.default)('http://localhost:3000/gridfs/003', { headers: { range: 'bytes=0-10' } }).then(res => {
     t.equal(res.status, 206, 'status 206 partial content');
     t.equal(res.headers.get('content-range'), 'bytes 0-10/62', 'bytes=0-10');
     t.equal(res.headers.get('content-length'), '11', 'content-length 11');
     t.equal(res.headers.get('etag'), 'b9b3cc3f3a30d8ef2bb1e2e267ed97de', 'txt file has a right etag');
     return res.buffer();
-  }).then(function (buffer) {
+  }).then(buffer => {
     t.equal(buffer.toString(), '0123456789a', 'txt has the right content');
   });
 
-  (0, _nodeFetch2.default)('http://localhost:3000/gridfs/003', { headers: { range: 'bytes=haha a string' } }).then(function (res) {
+  (0, _nodeFetch2.default)('http://localhost:3000/gridfs/003', { headers: { range: 'bytes=haha a string' } }).then(res => {
     t.equal(res.status, 416, 'status 416 when bytes=string ');
     t.equal(res.headers.get('content-range'), 'bytes */62', 'no content');
     t.equal(res.headers.get('content-length'), '0', 'content-length 0');
   });
-  (0, _nodeFetch2.default)('http://localhost:3000/gridfs/003', { headers: { range: 'bytes=62' } }).then(function (res) {
+  (0, _nodeFetch2.default)('http://localhost:3000/gridfs/003', { headers: { range: 'bytes=62' } }).then(res => {
     t.equal(res.status, 416, 'status 416 when bytes exceeding content-length ');
   });
-  (0, _nodeFetch2.default)('http://localhost:3000/gridfs/003', { headers: { range: 'apple' } }).then(function (res) {
+  (0, _nodeFetch2.default)('http://localhost:3000/gridfs/003', { headers: { range: 'apple' } }).then(res => {
     t.equal(res.status, 200, 'respond with 200 when syntactically invalid');
   });
 });
 
-(0, _tape.test)('Setting res.headers in server', function (t) {
+(0, _tape.test)('Setting res.headers in server', t => {
   t.plan(4);
 
-  (0, _nodeFetch2.default)('http://localhost:3000/gridfs-setHeaders/002').then(function (res) {
+  (0, _nodeFetch2.default)('http://localhost:3000/gridfs-setHeaders/002').then(res => {
     t.equal(res.headers.get('tada'), 'peanut', 'new peanut header');
     t.equal(res.headers.get('content-type'), 'picture', 'change content-type');
     t.equal(res.headers.get('_id'), '002', 'can set _id');
@@ -295,15 +335,15 @@ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { de
  *     lastModified: {bool}, // default not set (not false)
  *     acceptRanges: {bool}, // default not set (not false)
  *     fallthrough: {bool}, // default none (not false)
- *     setHeaders: {fn}, // default none, signature: function setHeaders(res, path, doc) {}
+ *     setHeaders: {fn}, // default none, signature: function setHeaders(res, path, stat) {
+ *       path is the req.url file
+ *       stat is the info from mongodb fs.files if the file is present
+ *     }
  *   }
  */
 
-function serveGridfs(mongoConnection) {
-  var options = arguments.length <= 1 || arguments[1] === undefined ? {} : arguments[1];
-  var _options$bucketName = options.bucketName;
-  var bucketName = _options$bucketName === undefined ? 'fs' : _options$bucketName;
-
+function serveGridfs(mongoConnection, options = {}) {
+  const { bucketName = 'fs' } = options;
   return function serveGridfsMiddleware(req, res, next) {
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       if (options.fallthrough !== false) {
@@ -318,17 +358,21 @@ function serveGridfs(mongoConnection) {
       return;
     }
 
-    mongoConnection.then(function (db) {
-      var _id = req.url.substr(1); // removing the first forward slash
-
-      return db.collection(bucketName + '.files').findOne({ _id: _id }).then(function (doc) {
+    mongoConnection.then(db => {
+      const _id = req.url.substr(1); // removing the first forward slash
+      return db.collection(bucketName + '.files').findOne({ _id }).then(doc => {
         if (!doc) {
-          res.status(404).end();
+          if (options.fallthrough !== false) {
+            next();
+          } else {
+            res.status(404);
+            next(new Error('FileNotFound'));
+          }
           return null;
         }
 
         // create a temp headers
-        var headers = makeHeaders(res, doc, options);
+        const headers = makeHeaders(res, doc, options);
 
         // check cache
         if (isConditionalGET(req.headers) && (0, _fresh2.default)(req.headers, headers)) {
@@ -337,13 +381,7 @@ function serveGridfs(mongoConnection) {
         }
 
         // range support
-
-        var _makeRanges = makeRanges(req, res, headers, doc.length, options);
-
-        var ranges = _makeRanges.ranges;
-        var start = _makeRanges.start;
-        var end = _makeRanges.end;
-
+        const { ranges, start, end } = makeRanges(req, res, headers, doc.length, options);
         if (ranges === -1) {
           res.end();
           return null;
@@ -353,9 +391,7 @@ function serveGridfs(mongoConnection) {
         headers['content-length'] = end - start;
 
         // assign the temp headers to res.headers
-        Object.keys(headers).forEach(function (h) {
-          return res.getHeader(h) || res.setHeader(h, headers[h]);
-        });
+        Object.keys(headers).forEach(h => res.getHeader(h) || res.setHeader(h, headers[h]));
         if (options.setHeader) options.setHeader(res, _id, doc);
 
         // HEAD support
@@ -363,8 +399,7 @@ function serveGridfs(mongoConnection) {
           res.end();
           return null;
         }
-
-        return new _mongodb.GridFSBucket(db, { bucketName: bucketName }).openDownloadStream(_id, { start: start, end: end }).on('error', next).pipe(res);
+        return new _mongodb.GridFSBucket(db, { options }).openDownloadStream(_id, { start, end }).on('error', next).pipe(res);
       });
     }).catch(next);
   };
@@ -372,14 +407,14 @@ function serveGridfs(mongoConnection) {
 
 
 function makeHeaders(res, doc, options) {
-  var headers = {}; // keys have to be in lowercase for the fresh function to work
-  var cacheControl = options.cacheControl;
-  var _options$maxAge = options.maxAge;
-  var maxAge = _options$maxAge === undefined ? 0 : _options$maxAge;
-  var etag = options.etag;
-  var lastModified = options.lastModified;
-  var acceptRanges = options.acceptRanges;
-
+  const headers = {}; // keys have to be in lowercase for the fresh function to work
+  const {
+    cacheControl,
+    maxAge = 0,
+    etag,
+    lastModified,
+    acceptRanges
+  } = options;
 
   if (cacheControl !== false) headers['cache-control'] = cacheControl || 'public, max-age=' + maxAge;
   if (etag !== false) headers['etag'] = doc.md5;
@@ -394,9 +429,9 @@ function makeHeaders(res, doc, options) {
 }
 
 function makeRanges(req, res, headers, len, options) {
-  var ranges = req.headers.range;
-  var start = 0;
-  var end = len;
+  let ranges = req.headers.range;
+  let start = 0;
+  let end = len;
   if (options.acceptRanges !== false && /^ *bytes=/.test(ranges)) {
     // BYTES_RANGE_REGEXP
     ranges = (0, _rangeParser2.default)(len, ranges, { combine: true });
@@ -421,7 +456,7 @@ function makeRanges(req, res, headers, len, options) {
       end = ranges[0].end + 1;
     }
   }
-  return { ranges: ranges, start: start, end: end };
+  return { ranges, start, end };
 }
 
 function isConditionalGET(reqHeaders) {
@@ -430,7 +465,7 @@ function isConditionalGET(reqHeaders) {
 
 function isRangeFresh(reqHeader, resHeader) {
   // eslint-disable-line no-inner-declarations
-  var ifRange = reqHeader['if-range'];
+  const ifRange = reqHeader['if-range'];
   if (!ifRange) return true;
   return ~ifRange.indexOf('"') // eslint-disable-line no-bitwise
   ? ~ifRange.indexOf(resHeader['etag']) // eslint-disable-line no-bitwise

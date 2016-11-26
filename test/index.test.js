@@ -16,16 +16,25 @@ mongoConnection.then(db => {
       uploadFile('./test/mouse.jpeg', '002', 'image/jpeg'),
       uploadFile('./test/bunnyBig.mp4', 'bunnyBig.mp4', 'video/mp4'),
       uploadFile('./test/cat.png', 'cat.png'),
-      uploadFile('./test/mouse.jpeg', 'mouse.jpeg'),
+      uploadFile('./test/mouse.jpeg', 'm/mouse.jpeg'),
       uploadFile('./test/number.txt', '003'),
     ]).then(() => {
       console.log('DB setup completed.')
     })
   })
 
-  function uploadFile(file, _id, contentType) {
+  db.collection('fs2.files').count().then(r => {
+    if (r) return
+    Promise.all([
+      uploadFile('./test/cat.png', '001b', '', { bucketName: 'fs2' }),
+    ]).then(() => {
+      console.log('DB2 setup completed.')
+    })
+  })
+
+  function uploadFile(file, _id, contentType, options = {}) {
     return new Promise((res, rej) => {
-      const bucket = new GridFSBucket(db)
+      const bucket = new GridFSBucket(db, options)
       const uploadStream = bucket.openUploadStreamWithId(_id, '', { contentType })
       createReadStream(file)
         .on('error', rej)
@@ -42,6 +51,7 @@ app.use((req, res, next) => {
 })
 app.use(express.static('./test/build'))
 app.use('/gridfs', serveGridfs(mongoConnection)) // this is the serveGridfs middleware for end users
+app.use('/gridfs-no-fallthrough', serveGridfs(mongoConnection, { fallthrough: false }))
 app.use('/gridfs-maxAge10', serveGridfs(mongoConnection, { maxAge: 10 }))
 app.use('/gridfs-maxAge0', serveGridfs(mongoConnection, { maxAge: 0 }))
 app.use('/gridfs-no-cacheControl', serveGridfs(mongoConnection, { cacheControl: false }))
@@ -55,10 +65,16 @@ function setHeader(res, _id, doc) {
   res.setHeader('_id', _id)
   res.setHeader('doclength', doc.length)
 }
+app.use('/gridfs2', serveGridfs(mongoConnection, { bucketName: 'fs2' }))
 
-// app.use((req, res, next) => {
-//   res.end(404)
-// })
+app.use((req, res) => {
+  res.status(404).end('Nothing found')
+})
+
+app.use((error, req, res, next) => {
+  console.log('the error', error)
+  res.end('Some error')
+})
 
 app.listen(3000, function () {
   console.log('\n\n\n\n\nExpress listening... and start testing now\n\n\n\n\n')
@@ -66,7 +82,7 @@ app.listen(3000, function () {
 
 
 test('Fetching a file known to be present in the server', t => {
-  t.plan(9)
+  t.plan(11)
 
   fetch('http://localhost:3000/gridfs/001')
     .then(res => {
@@ -82,13 +98,18 @@ test('Fetching a file known to be present in the server', t => {
     .then(buffer => {
       readFile('./test/cat.png', (err, result) => {
         t.equal(buffer.toString(), result.toString(), 'get the same cat pic')
-        // t.end()
       })
     })
 
   fetch('http://localhost:3000/gridfs/002')
     .then(res => {
       t.equal(res.headers.get('content-type'), 'image/jpeg', 'mouse has content-type')
+    })
+
+  fetch('http://localhost:3000/gridfs/m/mouse.jpeg')
+    .then(res => {
+      t.equal(res.status, 200, 'Can fetch file with slash')
+      t.equal(res.headers.get('etag'), '349e676ef9e4aff7e9d7bab6b52c44ce', 'with the right etag')
     })
 })
 
@@ -156,11 +177,38 @@ test('Setting cacheControl and maxAge', t => {
 })
 
 test('Fetching a non-existent file', t => {
-  t.plan(1)
+  t.plan(4)
 
   fetch('http://localhost:3000/gridfs/004')
     .then(res => {
       t.equal(res.status, 404, 'when no such file is present')
+      return res.buffer()
+    })
+    .then(buffer => {
+      t.equal(buffer.toString(), 'Nothing found', 'The req has passed thru to a downstream middleware')
+    })
+  fetch('http://localhost:3000/gridfs-no-fallthrough/004')
+    .then(res => {
+      t.equal(res.status, 404, 'when no such file is present')
+      return res.buffer()
+    })
+    .then(buffer => {
+      t.equal(buffer.toString(), 'Some error', 'The req did not pass thru')
+    })
+})
+
+test('Changing bucketName', t => {
+  t.plan(2)
+
+  fetch('http://localhost:3000/gridfs2/001b')
+    .then(res => {
+      t.equal(res.status, 200, 'able to change bucketName')
+    })
+
+  fetch('http://localhost:3000/gridfs2/001')
+    .then(res => {
+      // console.log(res )
+      t.equal(res.status, 404, 'No such file in this bucket fs2')
     })
 })
 

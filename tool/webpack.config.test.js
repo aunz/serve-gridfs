@@ -12,7 +12,7 @@ module.exports = {
       exclude: /(node_modules)/,
       loader: 'babel-loader',
       query: {
-        presets: ['latest', 'stage-0'],
+        presets: ['latest-minimal'],
         // plugins: ['transform-runtime'],
         // cacheDirectory: true, //cache into OS temp folder by default
       },

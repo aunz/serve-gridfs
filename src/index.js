@@ -15,7 +15,10 @@ import parseRange from 'range-parser'
  *     lastModified: {bool}, // default not set (not false)
  *     acceptRanges: {bool}, // default not set (not false)
  *     fallthrough: {bool}, // default none (not false)
- *     setHeaders: {fn}, // default none, signature: function setHeaders(res, path, doc) {}
+ *     setHeaders: {fn}, // default none, signature: function setHeaders(res, path, stat) {
+ *       path is the req.url file
+ *       stat is the info from mongodb fs.files if the file is present
+ *     }
  *   }
  */
 
@@ -39,12 +42,16 @@ export default function serveGridfs(mongoConnection, options = {}) {
     mongoConnection
       .then(db => {
         const _id = req.url.substr(1) // removing the first forward slash
-
         return db.collection(bucketName + '.files')
           .findOne({ _id })
           .then(doc => {
             if (!doc) {
-              res.status(404).end()
+              if (options.fallthrough !== false) {
+                next()
+              } else {
+                res.status(404)
+                next(new Error('FileNotFound'))
+              }
               return null
             }
 
@@ -76,8 +83,7 @@ export default function serveGridfs(mongoConnection, options = {}) {
               res.end()
               return null
             }
-
-            return new GridFSBucket(db, { bucketName })
+            return new GridFSBucket(db, { options })
               .openDownloadStream(_id, { start, end })
               .on('error', next)
               .pipe(res)

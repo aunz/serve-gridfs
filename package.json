@@ -6,7 +6,9 @@
   "scripts": {
     "test": "node tool/test",
     "dev": "node tool/dev",
-    "start": "start /B mongod --dbpath db --bind_ip 127.0.0.1 && node tool/test"
+    "bundle": "node tool/bundle",
+    "start": "start /B mongod --dbpath db --bind_ip 127.0.0.1 && node tool/test",
+    "prepublish": "npm run bundle"
   },
   "repository": {
     "type": "git",
