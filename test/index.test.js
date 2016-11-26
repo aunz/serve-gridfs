@@ -14,7 +14,6 @@ mongoConnection.then(db => {
     Promise.all([
       uploadFile('./test/cat.png', '001'),
       uploadFile('./test/mouse.jpeg', '002', 'image/jpeg'),
-      uploadFile('./test/bunnyBig.mp4', 'bunnyBig.mp4', 'video/mp4'),
       uploadFile('./test/cat.png', 'cat.png'),
       uploadFile('./test/mouse.jpeg', 'm/mouse.jpeg'),
       uploadFile('./test/number.txt', '003'),
