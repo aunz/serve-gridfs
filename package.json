@@ -2,7 +2,7 @@
   "name": "serve-gridfs",
   "version": "0.0.2",
   "description": "serve files with mongodb grdifs",
-  "main": "index.js",
+  "main": "build/bundle.js",
   "scripts": {
     "test": "node tool/test",
     "dev": "node tool/dev",
@@ -45,6 +45,6 @@
     "range-parser": "^1.2.0"
   },
   "files": [
-    "src/"
+    "build/"
   ]
 }
