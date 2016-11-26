@@ -36,7 +36,7 @@ Internally, this middleware use promised based mongo client, so pass in the conn
 All options are optional
 
 |Key | Type | Default  | Note
-|--- | --- | --- |
+|--- | --- | --- | --- |
 |bucketName | string | 'fs' | Default set by mongodb
 |chunkSizeBytes | number | 261120 | 255 * 1024
 |writeConcern | object | null ||
