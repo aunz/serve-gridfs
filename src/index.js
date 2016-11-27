@@ -83,7 +83,8 @@ export default function serveGridfs(mongoConnection, options = {}) {
             res.end()
             return
           }
-          new GridFSBucket(db, { options })[
+
+          new GridFSBucket(db, options)[
             options.byId !== false
               ? 'openDownloadStream'
               : 'openDownloadStreamByName'

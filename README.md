@@ -9,7 +9,7 @@ Based on [serve-static](https://github.com/expressjs/serve-static)
 
 Tested on node 7.x, npm 4.x
 
-Require [node-mongodb-native 2.2.x](https://github.com/mongodb/node-mongodb-native)
+Require [node-mongodb-native 2.x](https://github.com/mongodb/node-mongodb-native)
 
 ### Install
 ```shell
@@ -23,7 +23,7 @@ import serveGridfs from 'serve-gridfs'
 
 ```
 #### serveGridfs(mongoConnection, { options })
-Create a new middleware function to serve files from mongodb gridfs. The file to be served is based on `req.url`. In a default setting, when a file is not found, this middleware call `next()`, instead of returning `404`, to be in line with the express [serve-static](https://github.com/expressjs/serve-static) middleware. 
+Create a new middleware function to serve files from a mongodb gridfs collection. The file to be served is based on `req.url`. In a default setting, when a file is not found, this middleware call `next()`, instead of returning `404`, to be in line with the express [serve-static](https://github.com/expressjs/serve-static) middleware. 
 
 #### mongoConnection
 
@@ -42,7 +42,7 @@ All options are optional
 |writeConcern | object | null ||
 |readPreference | object | null ||
 |||||
-| byId | bool | true | The file sepecified in `req.url` by default is the mongodb `_id`, if set to `false`, mongodb will look for `filename` instead of `_id`, see example below
+| byId | bool | true | The file sepecified in `req.url` by default is the mongodb `_id`, if set to `false`, mongodb will look for `filename` instead of `_id`, see example below. When multiple files have the same filename, by default, the latest file will be served
 |acceptRanges | bool | true | Setting to `false` will not send `Accept-Ranges` and ignore the contents of the `Range` request header
 |cacheControl | bool or string | true | Setting to `false` will disable the `Cache-Control` in a response header. The default is public, max-age=0. You can set this to any string, which will also overide the maxAge key below.
 |maxAge | number | 0 | Set this to whatever you like in seconds
@@ -52,7 +52,7 @@ All options are optional
 |setHeaders | function | null | signature `function (res, path, stat) {}`. `path` is the requested file path, the `stat` is the stat of the file if present, produced by mongodb fs.files, typically, it is `{ _id, length, chuckSize, uploadDate, md5, filename }`, see [uploadStream](http://mongodb.github.io/node-mongodb-native/2.2/api/GridFSBucket.html#openUploadStream)
 
 
-Example
+### Example
 
 ```js
 // with express js
@@ -77,7 +77,7 @@ app.use('/uploads2', serveGridfs(mongoConnection, { bucketName: 'somethingElse' 
 
 ```
 
-
+Retriving a file
 
  
 ```shell
@@ -88,3 +88,11 @@ $ curl http://localhost:3000/uploads_byname/cat.png
 
 
 ```
+
+
+### Notes
+
+* Due to gridfs configuration, you can have an _id or filename containing slash, such as `cat/001` or `cat/tom.png` as an _id and filename respectively. In this case, `curl http://localhost:3000/uploads/cat/001` and `curl http://localhost:3000/uploads_byname/cat/tom.png` will resolve to the same file.
+
+
+

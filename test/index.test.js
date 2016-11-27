@@ -1,4 +1,4 @@
-import { createReadStream, readFile } from 'fs'
+import { createReadStream, readFile, createWriteStream } from 'fs'
 
 import express from 'express'
 import { MongoClient, GridFSBucket } from 'mongodb'
@@ -72,7 +72,7 @@ app.use((req, res) => {
 })
 
 app.use((error, req, res, next) => {
-  console.log('the error', error)
+  console.log('Error coming from previous middleware', error)
   res.end('Some error')
 })
 
@@ -80,42 +80,41 @@ app.listen(3000, function () {
   console.log('\n\n\n\n\nExpress listening... and start testing now\n\n\n\n\n')
 })
 
-
 test('Fetching a file known to be present in the server', t => {
   t.plan(13)
 
   fetch('http://localhost:3000/gridfs/001')
     .then(res => {
-      t.equal(res.status, 200, 'return with a 200')
-      t.equal(res.headers.get('cache-control'), 'public, max-age=0', 'cachable')
-      t.equal(res.headers.get('content-length'), '134437', 'have content-length')
-      t.equal(res.headers.get('etag'), 'fc43bf18c7c58fdec94d3caa2108a25b', 'have etag')
-      t.equal(res.headers.get('accept-ranges'), 'bytes', 'have accept-ranges')
-      t.equal(res.headers.get('content-type'), null, 'cat has no content-type')
-      t.ok(new Date(res.headers.get('last-modified')) < new Date(), 'have last-modified')
+      t.equal(res.status, 200, 'Return with a 200')
+      t.equal(res.headers.get('cache-control'), 'public, max-age=0', 'Cachable')
+      t.equal(res.headers.get('content-length'), '134437', 'Have content-length')
+      t.equal(res.headers.get('etag'), 'fc43bf18c7c58fdec94d3caa2108a25b', 'Have etag')
+      t.equal(res.headers.get('accept-ranges'), 'bytes', 'Have accept-ranges')
+      t.equal(res.headers.get('content-type'), null, 'Cat has no content-type')
+      t.ok(new Date(res.headers.get('last-modified')) < new Date(), 'Have last-modified')
       return res.buffer()
     })
     .then(buffer => {
       readFile('./test/cat.png', (err, result) => {
-        t.equal(buffer.toString(), result.toString(), 'get the same cat pic')
+        t.equal(buffer.toString(), result.toString(), 'Get the same cat pic')
       })
     })
 
   fetch('http://localhost:3000/gridfs/002')
     .then(res => {
-      t.equal(res.headers.get('content-type'), 'image/jpeg', 'mouse has content-type')
+      t.equal(res.headers.get('content-type'), 'image/jpeg', 'Mouse has content-type')
     })
 
   fetch('http://localhost:3000/gridfs/m/mouse.jpeg')
     .then(res => {
       t.equal(res.status, 200, 'Can fetch file with slash')
-      t.equal(res.headers.get('etag'), '349e676ef9e4aff7e9d7bab6b52c44ce', 'with the right etag')
+      t.equal(res.headers.get('etag'), '349e676ef9e4aff7e9d7bab6b52c44ce', 'With the right etag')
     })
 
   fetch('http://localhost:3000/gridfs-byname/catcat.png')
     .then(res => {
       t.equal(res.status, 200, 'Can fetch file by name')
-      t.equal(res.headers.get('etag'), 'fc43bf18c7c58fdec94d3caa2108a25b', 'with the right etag')
+      t.equal(res.headers.get('etag'), 'fc43bf18c7c58fdec94d3caa2108a25b', 'With the right etag')
     })
 })
 
@@ -125,7 +124,7 @@ test('Fetching a file already cached', t => {
 
   fetch('http://localhost:3000/gridfs/001', { headers: { 'If-None-Match': 'fc43bf18c7c58fdec94d3caa2108a25b' } })
     .then(res => {
-      t.equal(res.status, 304, 'when If-None-Match is correctly set in request header')
+      t.equal(res.status, 304, 'When If-None-Match is correctly set in request header')
       const n = JSON.stringify([
         res.headers.get('cache-control'),
         res.headers.get('content-length'),
@@ -134,11 +133,11 @@ test('Fetching a file already cached', t => {
         res.headers.get('content-type'),
         res.headers.get('last-modified'),
       ])
-      t.equal(n, '[null,null,null,null,null,null]', 'empty headers when 304')
+      t.equal(n, '[null,null,null,null,null,null]', 'Empty headers when 304')
     })
   fetch('http://localhost:3000/gridfs/001', { headers: { 'If-None-Match': '' } })
     .then(res => {
-      t.equal(res.status, 200, 'when If-None-Match is NOT correctly set in request header')
+      t.equal(res.status, 200, 'When If-None-Match is NOT correctly set in request header')
     })
   fetch('http://localhost:3000/gridfs-no-etag/001', { headers: { 'If-None-Match': 'fc43bf18c7c58fdec94d3caa2108a25b' } })
     .then(res => {
@@ -147,11 +146,11 @@ test('Fetching a file already cached', t => {
 
   fetch('http://localhost:3000/gridfs/001', { headers: { 'If-Modified-Since': new Date().toString() } })
     .then(res => {
-      t.equal(res.status, 304, 'when If-Modified-Since is correctly set in request header')
+      t.equal(res.status, 304, 'When If-Modified-Since is correctly set in request header')
     })
   fetch('http://localhost:3000/gridfs/001', { headers: { 'If-Modified-Since': new Date('1/1/1111').toString() } }) // ancient time
     .then(res => {
-      t.equal(res.status, 200, 'when If-Modified-Since is NOT correctly set in request header')
+      t.equal(res.status, 200, 'When If-Modified-Since is NOT correctly set in request header')
     })
   fetch('http://localhost:3000/gridfs-no-lastModified/001', { headers: { 'If-Modified-Since': new Date().toString() } })
     .then(res => {
@@ -163,22 +162,22 @@ test('Setting cacheControl and maxAge', t => {
   t.plan(4)
   fetch('http://localhost:3000/gridfs-maxAge10/001')
     .then(res => {
-      t.equal(res.headers.get('cache-control'), 'public, max-age=10', 'can change maxAge')
+      t.equal(res.headers.get('cache-control'), 'public, max-age=10', 'Can change maxAge')
     })
 
   fetch('http://localhost:3000/gridfs-maxAge0/001')
     .then(res => {
-      t.equal(res.headers.get('cache-control'), 'public, max-age=0', 'can change maxAge')
+      t.equal(res.headers.get('cache-control'), 'public, max-age=0', 'Can change maxAge')
     })
 
   fetch('http://localhost:3000/gridfs-no-cacheControl/001')
     .then(res => {
-      t.equal(res.headers.get('cache-control'), null, 'no cache control')
+      t.equal(res.headers.get('cache-control'), null, 'No cache control')
     })
 
   fetch('http://localhost:3000/gridfs-set-cacheControl/001')
     .then(res => {
-      t.equal(res.headers.get('cache-control'), 'blah blah', 'setting cache control to arbitrary blah blah')
+      t.equal(res.headers.get('cache-control'), 'blah blah', 'Setting cache control to arbitrary blah blah')
     })
 })
 
@@ -187,7 +186,7 @@ test('Fetching a non-existent file', t => {
 
   fetch('http://localhost:3000/gridfs/004')
     .then(res => {
-      t.equal(res.status, 404, 'when no such file is present')
+      t.equal(res.status, 404, 'When no such file is present')
       return res.buffer()
     })
     .then(buffer => {
@@ -218,12 +217,11 @@ test('Changing bucketName', t => {
 
   fetch('http://localhost:3000/gridfs2/001b')
     .then(res => {
-      t.equal(res.status, 200, 'able to change bucketName')
+      t.equal(res.status, 200, 'Able to change bucketName')
     })
 
   fetch('http://localhost:3000/gridfs2/001')
     .then(res => {
-      // console.log(res )
       t.equal(res.status, 404, 'No such file in this bucket fs2')
     })
 })
@@ -233,29 +231,29 @@ test('Range request', t => {
 
   fetch('http://localhost:3000/gridfs/003', { headers: { range: 'bytes=0-10' } })
     .then(res => {
-      t.equal(res.status, 206, 'status 206 partial content')
+      t.equal(res.status, 206, 'Status 206 partial content')
       t.equal(res.headers.get('content-range'), 'bytes 0-10/62', 'bytes=0-10')
       t.equal(res.headers.get('content-length'), '11', 'content-length 11')
-      t.equal(res.headers.get('etag'), 'b9b3cc3f3a30d8ef2bb1e2e267ed97de', 'txt file has a right etag')
+      t.equal(res.headers.get('etag'), 'b9b3cc3f3a30d8ef2bb1e2e267ed97de', 'Txt file has a right etag')
       return res.buffer()
     })
     .then(buffer => {
-      t.equal(buffer.toString(), '0123456789a', 'txt has the right content')
+      t.equal(buffer.toString(), '0123456789a', 'Txt has the right content')
     })
 
   fetch('http://localhost:3000/gridfs/003', { headers: { range: 'bytes=haha a string' } })
     .then(res => {
-      t.equal(res.status, 416, 'status 416 when bytes=string ')
-      t.equal(res.headers.get('content-range'), 'bytes */62', 'no content')
+      t.equal(res.status, 416, 'Status 416 when bytes=string ')
+      t.equal(res.headers.get('content-range'), 'bytes */62', 'No content')
       t.equal(res.headers.get('content-length'), '0', 'content-length 0')
     })
   fetch('http://localhost:3000/gridfs/003', { headers: { range: 'bytes=62' } })
     .then(res => {
-      t.equal(res.status, 416, 'status 416 when bytes exceeding content-length ')
+      t.equal(res.status, 416, 'Status 416 when bytes exceeding content-length ')
     })
   fetch('http://localhost:3000/gridfs/003', { headers: { range: 'apple' } })
     .then(res => {
-      t.equal(res.status, 200, 'respond with 200 when syntactically invalid')
+      t.equal(res.status, 200, 'Eespond with 200 when syntactically invalid')
     })
 })
 
@@ -264,10 +262,10 @@ test('Setting res.headers in server', t => {
 
   fetch('http://localhost:3000/gridfs-setHeaders/002')
     .then(res => {
-      t.equal(res.headers.get('tada'), 'peanut', 'new peanut header')
-      t.equal(res.headers.get('content-type'), 'picture', 'change content-type')
-      t.equal(res.headers.get('_id'), '002', 'can set _id')
-      t.equal(res.headers.get('doclength'), '18573', 'can read doc')
+      t.equal(res.headers.get('tada'), 'peanut', 'New peanut header')
+      t.equal(res.headers.get('content-type'), 'picture', 'Change content-type')
+      t.equal(res.headers.get('_id'), '002', 'Can set _id')
+      t.equal(res.headers.get('doclength'), '18573', 'Can read doc')
     })
 })
 
@@ -295,10 +293,10 @@ test('HEAD, POST, PUT, DELETE methods', t => {
     })
   fetch('http://localhost:3000/gridfs-no-fallthrough/001', { method: 'post' })
     .then(res => {
-      t.equal(res.status, 405, 'no fallthrough with post')
+      t.equal(res.status, 405, 'No fallthrough with post')
     })
   fetch('http://localhost:3000/gridfs-no-fallthrough/001', { method: 'put' })
     .then(res => {
-      t.equal(res.status, 405, 'no fallthrough with put')
+      t.equal(res.status, 405, 'No fallthrough with put')
     })
 })
