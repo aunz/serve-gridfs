@@ -102,7 +102,7 @@ const mongoConnection = _mongodb.MongoClient.connect('mongodb://localhost:27017/
 mongoConnection.then(db => {
   db.collection('fs.files').count().then(r => {
     if (r) return;
-    Promise.all([uploadFile('./test/cat.png', '001'), uploadFile('./test/mouse.jpeg', '002', 'image/jpeg'), uploadFile('./test/bunnyBig.mp4', 'bunnyBig.mp4', 'video/mp4'), uploadFile('./test/cat.png', 'cat.png'), uploadFile('./test/mouse.jpeg', 'm/mouse.jpeg'), uploadFile('./test/number.txt', '003')]).then(() => {
+    Promise.all([uploadFile('./test/cat.png', '001'), uploadFile('./test/mouse.jpeg', '002', { contentType: 'image/jpeg' }), uploadFile('./test/cat.png', 'cat', { filename: 'catcat.png' }), uploadFile('./test/mouse.jpeg', 'm/mouse.jpeg'), uploadFile('./test/number.txt', '003')]).then(() => {
       console.log('DB setup completed.');
     });
   });
@@ -114,10 +114,10 @@ mongoConnection.then(db => {
     });
   });
 
-  function uploadFile(file, _id, contentType, options = {}) {
+  function uploadFile(file, _id, { filename, contentType } = {}, options = {}) {
     return new Promise((res, rej) => {
       const bucket = new _mongodb.GridFSBucket(db, options);
-      const uploadStream = bucket.openUploadStreamWithId(_id, '', { contentType });
+      const uploadStream = bucket.openUploadStreamWithId(_id, filename, { contentType });
       (0, _fs.createReadStream)(file).on('error', rej).pipe(uploadStream).on('finish', res);
     });
   }
@@ -136,6 +136,7 @@ app.use('/gridfs-no-cacheControl', (0, _src2.default)(mongoConnection, { cacheCo
 app.use('/gridfs-set-cacheControl', (0, _src2.default)(mongoConnection, { cacheControl: 'blah blah' }));
 app.use('/gridfs-no-etag', (0, _src2.default)(mongoConnection, { etag: false }));
 app.use('/gridfs-no-lastModified', (0, _src2.default)(mongoConnection, { lastModified: false }));
+app.use('/gridfs-byname', (0, _src2.default)(mongoConnection, { byId: false }));
 app.use('/gridfs-setHeaders', (0, _src2.default)(mongoConnection, { setHeader }));
 function setHeader(res, _id, doc) {
   res.setHeader('tada', 'peanut');
@@ -159,7 +160,7 @@ app.listen(3000, function () {
 });
 
 (0, _tape.test)('Fetching a file known to be present in the server', t => {
-  t.plan(11);
+  t.plan(13);
 
   (0, _nodeFetch2.default)('http://localhost:3000/gridfs/001').then(res => {
     t.equal(res.status, 200, 'return with a 200');
@@ -183,6 +184,11 @@ app.listen(3000, function () {
   (0, _nodeFetch2.default)('http://localhost:3000/gridfs/m/mouse.jpeg').then(res => {
     t.equal(res.status, 200, 'Can fetch file with slash');
     t.equal(res.headers.get('etag'), '349e676ef9e4aff7e9d7bab6b52c44ce', 'with the right etag');
+  });
+
+  (0, _nodeFetch2.default)('http://localhost:3000/gridfs-byname/catcat.png').then(res => {
+    t.equal(res.status, 200, 'Can fetch file by name');
+    t.equal(res.headers.get('etag'), 'fc43bf18c7c58fdec94d3caa2108a25b', 'with the right etag');
   });
 });
 
@@ -233,7 +239,7 @@ app.listen(3000, function () {
 });
 
 (0, _tape.test)('Fetching a non-existent file', t => {
-  t.plan(4);
+  t.plan(6);
 
   (0, _nodeFetch2.default)('http://localhost:3000/gridfs/004').then(res => {
     t.equal(res.status, 404, 'when no such file is present');
@@ -246,6 +252,14 @@ app.listen(3000, function () {
     return res.buffer();
   }).then(buffer => {
     t.equal(buffer.toString(), 'Some error', 'The req did not pass thru');
+  });
+
+  (0, _nodeFetch2.default)('http://localhost:3000/gridfs-byname/cat').then(res => {
+    t.equal(res.status, 404, 'Gridfs-byname no _id');
+  });
+
+  (0, _nodeFetch2.default)('http://localhost:3000/gridfs-byname/001').then(res => {
+    t.equal(res.status, 404, 'Gridfs-byname no _id');
   });
 });
 
@@ -299,6 +313,31 @@ app.listen(3000, function () {
   });
 });
 
+(0, _tape.test)('HEAD, POST, PUT, DELETE methods', t => {
+  t.plan(7);
+  (0, _nodeFetch2.default)('http://localhost:3000/gridfs/001', { method: 'head' }).then(res => {
+    t.equal(res.status, 200, 'Can do HEAD');
+    return res.buffer();
+  }).then(buffer => {
+    t.equal(buffer.toString(), '', 'HEAD should have no body');
+  });
+  (0, _nodeFetch2.default)('http://localhost:3000/gridfs/001', { method: 'post' }).then(res => {
+    t.equal(res.status, 404, 'Cannot do POST');
+  });
+  (0, _nodeFetch2.default)('http://localhost:3000/gridfs/001', { method: 'put' }).then(res => {
+    t.equal(res.status, 404, 'Cannot do PUT');
+  });
+  (0, _nodeFetch2.default)('http://localhost:3000/gridfs/001', { method: 'put' }).then(res => {
+    t.equal(res.status, 404, 'Cannot do DELETE');
+  });
+  (0, _nodeFetch2.default)('http://localhost:3000/gridfs-no-fallthrough/001', { method: 'post' }).then(res => {
+    t.equal(res.status, 405, 'no fallthrough with post');
+  });
+  (0, _nodeFetch2.default)('http://localhost:3000/gridfs-no-fallthrough/001', { method: 'put' }).then(res => {
+    t.equal(res.status, 405, 'no fallthrough with put');
+  });
+});
+
 /***/ },
 /* 2 */
 /***/ function(module, exports, __webpack_require__) {
@@ -329,6 +368,7 @@ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { de
  *   {
  *     bucketName: {string}, // mongodb default is 'fs'
  *     chunkSizeBytes: {number}, //mongodb default is 255 * 1024
+ *     byId: {bool}, default to true, if set to false, will download by filename
  *     cacheControl: {bool|string}, // default not set (not false)
  *     maxAge: {number}, // default to 0
  *     etag: {bool}, // default not set (not false)
@@ -360,7 +400,9 @@ function serveGridfs(mongoConnection, options = {}) {
 
     mongoConnection.then(db => {
       const _id = req.url.substr(1); // removing the first forward slash
-      return db.collection(bucketName + '.files').findOne({ _id }).then(doc => {
+      const cursor = db.collection(bucketName + '.files');
+      const findOne = options.byId !== false ? cursor.findOne({ _id }) : cursor.findOne({ filename: _id });
+      return findOne.then(doc => {
         if (!doc) {
           if (options.fallthrough !== false) {
             next();
@@ -368,7 +410,7 @@ function serveGridfs(mongoConnection, options = {}) {
             res.status(404);
             next(new Error('FileNotFound'));
           }
-          return null;
+          return;
         }
 
         // create a temp headers
@@ -377,14 +419,14 @@ function serveGridfs(mongoConnection, options = {}) {
         // check cache
         if (isConditionalGET(req.headers) && (0, _fresh2.default)(req.headers, headers)) {
           res.status(304).end();
-          return null;
+          return;
         }
 
         // range support
         const { ranges, start, end } = makeRanges(req, res, headers, doc.length, options);
         if (ranges === -1) {
           res.end();
-          return null;
+          return;
         }
 
         // adjust content-length
@@ -397,9 +439,9 @@ function serveGridfs(mongoConnection, options = {}) {
         // HEAD support
         if (req.method === 'HEAD') {
           res.end();
-          return null;
+          return;
         }
-        return new _mongodb.GridFSBucket(db, { options }).openDownloadStream(_id, { start, end }).on('error', next).pipe(res);
+        new _mongodb.GridFSBucket(db, { options })[options.byId !== false ? 'openDownloadStream' : 'openDownloadStreamByName'](_id, { start, end }).on('error', next).pipe(res);
       });
     }).catch(next);
   };

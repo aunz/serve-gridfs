@@ -9,6 +9,7 @@ import parseRange from 'range-parser'
  *   {
  *     bucketName: {string}, // mongodb default is 'fs'
  *     chunkSizeBytes: {number}, //mongodb default is 255 * 1024
+ *     byId: {bool}, default to true, if set to false, will download by filename
  *     cacheControl: {bool|string}, // default not set (not false)
  *     maxAge: {number}, // default to 0
  *     etag: {bool}, // default not set (not false)
@@ -38,56 +39,58 @@ export default function serveGridfs(mongoConnection, options = {}) {
       return
     }
 
-
     mongoConnection
       .then(db => {
         const _id = req.url.substr(1) // removing the first forward slash
-        return db.collection(bucketName + '.files')
-          .findOne({ _id })
-          .then(doc => {
-            if (!doc) {
-              if (options.fallthrough !== false) {
-                next()
-              } else {
-                res.status(404)
-                next(new Error('FileNotFound'))
-              }
-              return null
+        const cursor = db.collection(bucketName + '.files')
+        const findOne = options.byId !== false ? cursor.findOne({ _id }) : cursor.findOne({ filename: _id })
+        return findOne.then(doc => {
+          if (!doc) {
+            if (options.fallthrough !== false) {
+              next()
+            } else {
+              res.status(404)
+              next(new Error('FileNotFound'))
             }
+            return
+          }
 
-            // create a temp headers
-            const headers = makeHeaders(res, doc, options)
+          // create a temp headers
+          const headers = makeHeaders(res, doc, options)
 
-            // check cache
-            if (isConditionalGET(req.headers) && fresh(req.headers, headers)) {
-              res.status(304).end()
-              return null
-            }
+          // check cache
+          if (isConditionalGET(req.headers) && fresh(req.headers, headers)) {
+            res.status(304).end()
+            return
+          }
 
-            // range support
-            const { ranges, start, end } = makeRanges(req, res, headers, doc.length, options)
-            if (ranges === -1) {
-              res.end()
-              return null
-            }
+          // range support
+          const { ranges, start, end } = makeRanges(req, res, headers, doc.length, options)
+          if (ranges === -1) {
+            res.end()
+            return
+          }
 
-            // adjust content-length
-            headers['content-length'] = end - start
+          // adjust content-length
+          headers['content-length'] = end - start
 
-            // assign the temp headers to res.headers
-            Object.keys(headers).forEach(h => res.getHeader(h) || res.setHeader(h, headers[h]))
-            if (options.setHeader) options.setHeader(res, _id, doc)
+          // assign the temp headers to res.headers
+          Object.keys(headers).forEach(h => res.getHeader(h) || res.setHeader(h, headers[h]))
+          if (options.setHeader) options.setHeader(res, _id, doc)
 
-            // HEAD support
-            if (req.method === 'HEAD') {
-              res.end()
-              return null
-            }
-            return new GridFSBucket(db, { options })
-              .openDownloadStream(_id, { start, end })
-              .on('error', next)
-              .pipe(res)
-          })
+          // HEAD support
+          if (req.method === 'HEAD') {
+            res.end()
+            return
+          }
+          new GridFSBucket(db, { options })[
+            options.byId !== false
+              ? 'openDownloadStream'
+              : 'openDownloadStreamByName'
+          ](_id, { start, end })
+            .on('error', next)
+            .pipe(res)
+        })
       })
       .catch(next)
   }
