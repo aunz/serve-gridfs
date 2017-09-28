@@ -1,5 +1,5 @@
 // borrowed from https://github.com/expressjs/serve-static/blob/master/index.js
-import { GridFSBucket } from 'mongodb'
+import { GridFSBucket, ObjectID } from 'mongodb'
 import fresh from 'fresh'
 import parseRange from 'range-parser'
 
@@ -43,7 +43,7 @@ export default function serveGridfs(mongoConnection, options = {}) {
       .then(db => {
         const _id = req.url.substr(1) // removing the first forward slash
         const cursor = db.collection(bucketName + '.files')
-        const findOne = options.byId !== false ? cursor.findOne({ _id }) : cursor.findOne({ filename: _id })
+        const findOne = options.byId !== false ? cursor.findOne({ _id: ObjectID(_id) }) : cursor.findOne({ filename: _id })
         return findOne.then(doc => {
           if (!doc) {
             if (options.fallthrough !== false) {
@@ -88,7 +88,7 @@ export default function serveGridfs(mongoConnection, options = {}) {
             options.byId !== false
               ? 'openDownloadStream'
               : 'openDownloadStreamByName'
-          ](_id, { start, end })
+          ](ObjectID(_id), { start, end })
             .on('error', next)
             .pipe(res)
         })
