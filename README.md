@@ -7,9 +7,9 @@ Based on [serve-static](https://github.com/expressjs/serve-static)
 
 
 
-Tested on node 7.x, npm 4.x
+Tested on node 10.x, npm 6.x
 
-Require [node-mongodb-native 2.x](https://github.com/mongodb/node-mongodb-native)
+Require [node-mongodb-native 3.x](https://github.com/mongodb/node-mongodb-native)
 
 ### Install
 ```shell
