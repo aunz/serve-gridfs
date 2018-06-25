@@ -8,7 +8,7 @@
     "dev": "node tool/dev",
     "bundle": "node tool/bundle",
     "start": "start /B mongod --dbpath db --bind_ip 127.0.0.1 && node tool/test",
-    "prepublish": "npm run bundle"
+    "prepare": "npm run bundle"
   },
   "repository": {
     "type": "git",
@@ -26,9 +26,10 @@
   },
   "homepage": "https://github.com/aunz/serve-gridfs#readme",
   "devDependencies": {
+    "@babel/core": "^7.0.0-beta.51",
+    "@babel/preset-env": "^7.0.0-beta.51",
     "babel-eslint": "^7.0.0",
-    "babel-loader": "^6.2.5",
-    "babel-preset-latest-minimal": "^1.1.2",
+    "babel-loader": "^8.0.0-beta.4",
     "eslint": "^3.6.1",
     "eslint-config-airbnb": "^12.0.0",
     "eslint-plugin-import": "^1.16.0",
@@ -37,8 +38,9 @@
     "express": "^4.14.0",
     "mongodb": "^2.2.10",
     "node-fetch": "^1.6.3",
+    "shelljs": "^0.8.2",
     "tape": "^4.6.0",
-    "webpack": "^2.1.0-beta.25"
+    "webpack": "^4.12.1"
   },
   "dependencies": {
     "fresh": "^0.5.2",

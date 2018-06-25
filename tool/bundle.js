@@ -9,8 +9,8 @@ config.plugins.push(
     __DEV__: false,
     'process.env.NODE_ENV': '"production"',
   }),
-  new webpack.optimize.DedupePlugin(),
-  new webpack.optimize.AggressiveMergingPlugin()
+  // new webpack.optimize.DedupePlugin(),
+  // new webpack.optimize.AggressiveMergingPlugin()
   /*new webpack.optimize.UglifyJsPlugin({
     compress: {
       warnings: false,
@@ -19,6 +19,7 @@ config.plugins.push(
     comments: false,
   })*/
 )
+config.mode = 'production'
 
 webpack(config).run((err, stats) => {
   console.log('Client Bundles \n', stats.toString({

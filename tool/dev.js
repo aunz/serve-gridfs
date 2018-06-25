@@ -4,6 +4,7 @@ const config = require('./webpack.config.test.js')
 
 config.entry = ['./test/server.js']
 config.output.filename = 'serverBundle.js'
+config.mode = 'development'
 
 let child
 const builtFile = require('path').join(config.output.path, config.output.filename)

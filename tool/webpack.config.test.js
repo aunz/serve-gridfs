@@ -2,7 +2,7 @@ module.exports = {
   entry: ['./test/index.test.js'],
   output: {
     path: './test/build',
-    filename: 'bundle.test.js',
+    filename: require('path').resolve('bundle.test.js'),
     libraryTarget: 'commonjs2',
   },
   target: 'node',
@@ -28,4 +28,5 @@ module.exports = {
     __filename: true,
     __dirname: true,
   },
+  mode: 'development',
 }
