@@ -1,21 +1,22 @@
 module.exports = {
   entry: ['./test/index.test.js'],
   output: {
-    path: './test/build',
-    filename: require('path').resolve('bundle.test.js'),
+    path: require('path').resolve('./test/build'),
+    filename: 'bundle.test.js',
     libraryTarget: 'commonjs2',
   },
   target: 'node',
   module: {
-    loaders: [{
+    rules: [{
       test: /\.jsx?$/,
       exclude: /(node_modules)/,
-      loader: 'babel-loader',
-      query: {
-        presets: ['latest-minimal'],
-        // plugins: ['transform-runtime'],
-        // cacheDirectory: true, //cache into OS temp folder by default
-      },
+      use: [{
+        loader: 'babel-loader',
+        query: {
+          // plugins: ['transform-runtime'],
+          // cacheDirectory: true, //cache into OS temp folder by default
+        },
+      }]
     }],
   },
   plugins: [
